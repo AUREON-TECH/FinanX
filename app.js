@@ -1,6 +1,25 @@
 const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);const money=v=>Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});const today=()=>{const d=new Date();const y=d.getFullYear();const m=String(d.getMonth()+1).padStart(2,'0');const day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`};const uid=()=>crypto.randomUUID?crypto.randomUUID():Date.now()+Math.random().toString(16).slice(2);const formatDate=d=>d?new Date(d+'T12:00:00').toLocaleDateString('pt-BR'):'Sem prazo';const esc=(s='')=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));const sum=a=>a.reduce((t,x)=>t+Number(x.amount||0),0);
-const state=JSON.parse(localStorage.getItem('finanx:data')||'{}');for(const k of ['debts','expenses','incomes','investments','assets','goals'])if(!Array.isArray(state[k]))state[k]=[];
-function save(){localStorage.setItem('finanx:data',JSON.stringify(state));render()}
+// Preserve unreadable financial records instead of silently replacing them.
+let storageBlocked=false;
+let state={};
+try{
+  const raw=localStorage.getItem('finanx:data');
+  if(raw!==null){
+    const parsed=JSON.parse(raw);
+    if(!parsed||typeof parsed!=='object'||Array.isArray(parsed))throw new Error('Formato de dados inválido');
+    state=parsed;
+  }
+}catch(error){
+  storageBlocked=true;
+  console.error('FinanX: dados não carregados; conteúdo original preservado.',error);
+  window.addEventListener('load',()=>alert('FinanX: não foi possível ler seus dados salvos. O conteúdo original não será substituído. Faça uma cópia dos dados do navegador antes de continuar.'));
+}
+for(const k of ['debts','expenses','incomes','investments','assets','goals'])if(!Array.isArray(state[k]))state[k]=[];
+function save(){
+  if(storageBlocked){alert('FinanX: salvamento bloqueado para preservar os dados originais.');render();return false}
+  try{localStorage.setItem('finanx:data',JSON.stringify(state));render();return true}
+  catch(error){console.error('FinanX: falha ao salvar dados.',error);alert('FinanX: os dados não foram salvos. Verifique o armazenamento do navegador e faça um backup antes de fechar a página.');render();return false}
+}
 function debtStatus(d){if(d.paid)return'paid';return d.dueDate<today()?'overdue':'pending'}
 function renderList(el,html,empty){el.innerHTML=html||empty;el.classList.toggle('empty-state',!html)}
 function render(){const filter=$('#debtFilter').value;const overdue=state.debts.filter(d=>debtStatus(d)==='overdue'),pending=state.debts.filter(d=>debtStatus(d)==='pending'),paid=state.debts.filter(d=>debtStatus(d)==='paid'),debts=state.debts.filter(d=>filter==='all'||debtStatus(d)===filter);const inv=sum(state.investments),assets=sum(state.assets),exp=sum(state.expenses),inc=sum(state.incomes),open=sum([...overdue,...pending]),paidVal=sum(paid),allDebt=open+paidVal,proj=inc-exp-open,net=assets+inv-open;
